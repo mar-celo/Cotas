@@ -1,0 +1,196 @@
+---
+title: "Ingressos no Serviço Público Federal"
+author: "COINF"
+output:
+  flexdashboard::flex_dashboard:
+    theme: paper
+    favicon: img/ios7-location-outline.png
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+# Load the data
+library(tidyverse)
+library(htmltools)
+library(crosstalk)
+library(plotly)
+
+
+df_total <- read_csv("Y:/Teste/Marcelo/Cotas/df_total.csv", locale = locale(encoding = "ISO-8859-1"))
+df_orgao <- read_csv("Y:/Teste/Marcelo/Cotas/df_orgao.csv", locale = locale(encoding = "ISO-8859-1"))
+df_carreira <- read_csv("Y:/Teste/Marcelo/Cotas/df_carreira.csv", locale = locale(encoding = "ISO-8859-1")) |> 
+  filter(!is.na(VAR_0183_CARREIRA ))
+
+# Substituir todos os NA's por 0 
+df_total[is.na(df_total)] <- 0
+df_orgao[is.na(df_orgao)] <- 0
+df_carreira[is.na(df_carreira)] <- 0
+
+
+# tratar tabela total para ficar com as colunas que eu quero
+
+df_total_orgao <- df_total |> 
+  janitor::clean_names() |>
+  dplyr::mutate( Total = qtd_cotas_nao +qtd_cotas_nao_informado + qtd_cotas_cota_pcd + qtd_cotas_cota_racial,
+                 no_orgao_vinculacao = "Todos os Órgãos") |>
+  # realocar a coluna no_orgao_vinculacao para a segunda posição
+  dplyr::relocate(no_orgao_vinculacao, .after = ano)|>
+  dplyr::select(-name) |> 
+  dplyr::arrange(ano) |> 
+  # alterar as colunas que iniciam com perc_ para arrendondar para 2 casas decimais
+  dplyr::mutate(across(starts_with("perc_"), ~  round(.x, 2)))
+  #dplyr::mutate(across(starts_with("perc_"), ~ formattable::percent(.x/100, digits = 2)))
+
+df_total_carreira <- df_total |> 
+  janitor::clean_names() |>
+  dplyr::mutate( Total = qtd_cotas_nao +qtd_cotas_nao_informado + qtd_cotas_cota_pcd + qtd_cotas_cota_racial,
+                 var_0183_carreira = "Todas as Carreiras") |>
+  # realocar a coluna var_0183_carreira para a segunda posição
+  dplyr::relocate(var_0183_carreira, .after = ano)|>
+  dplyr::select(-name) |> 
+  dplyr::arrange(ano) |> 
+  # alterar as colunas que iniciam com perc_ para arrendondar para 2 casas decimais
+   dplyr::mutate(across(starts_with("perc_"), ~  round(.x, 2)))
+  #dplyr::mutate(across(starts_with("perc_"), ~ formattable::percent(.x/100, digits = 2)))
+
+
+# tratar tabela orgao para ficar com as colunas que eu quero
+
+df_orgao <- df_orgao |> 
+  janitor::clean_names() |>
+  dplyr::mutate( Total = qtd_cotas_nao +qtd_cotas_nao_informado + qtd_cotas_cota_pcd + qtd_cotas_cota_racial ) |>
+  dplyr::select(-name) |> 
+  dplyr::arrange(ano) |> 
+  # alterar as colunas que iniciam com perc_ para arrendondar para 2 casas decimais
+   dplyr::mutate(across(starts_with("perc_"), ~  round(.x, 2)))
+  #dplyr::mutate(across(starts_with("perc_"), ~ formattable::percent(.x/100, digits = 2))) 
+
+# tratamento da tabela carreira para ficar com as colunas que eu quero
+
+df_carreira <- df_carreira |> 
+  janitor::clean_names() |>
+  dplyr::mutate( Total = qtd_cotas_nao +qtd_cotas_nao_informado + qtd_cotas_cota_pcd + qtd_cotas_cota_racial ) |>
+  dplyr::select(-name) |> 
+  dplyr::arrange(ano) |> 
+  # alterar as colunas que iniciam com perc_ para arrendondar para 2 casas decimais
+   dplyr::mutate(across(starts_with("perc_"), ~  round(.x, 2)))
+  #dplyr::mutate(across(starts_with("perc_"), ~ formattable::percent(.x/100, digits = 2)))
+
+
+  
+  
+```
+
+Ingresso no Serviço Público {data-icon="ion-stats-bars"}
+=====================================  
+
+Column 
+-------------------------------------
+
+### Por Órgão
+
+```{r filters}
+# empilhar df_total e df_orgao
+
+df_completo <- rbind(df_total_orgao, df_orgao)
+
+
+
+# Criar um SharedData para a base agregada
+shared_agg_df <- SharedData$new(df_completo, key = ~no_orgao_vinculacao, group = "CategoryFilter")
+
+# Criar um filtro de seleção para as categorias
+filter_select <- filter_select(
+  id = "category_selector",
+  label = "Selecione o Órgão",
+  sharedData = shared_agg_df,
+  group = ~no_orgao_vinculacao,
+  multiple = FALSE, allLevels = TRUE
+)
+
+# Criar o gráfico combinado de barras e linhas por mês e ano
+combined_plot <- plot_ly(shared_agg_df) %>%
+  add_bars(x = ~interaction(ano), y = ~Total, name = 'Ingressos', color = I("blue")) %>%
+  add_lines(x = ~interaction(ano), y = ~perc_cotas_cota_racial, name = '% Cota Racial', yaxis = 'y2', line = list(color = "red")) %>%
+  layout(
+    title = "Total de Ingressos e Percentual de Cota Racial por Ano",
+    xaxis = list(title = "Ano de Ingresso"),
+    yaxis = list(title = 'Total de Ingressos '),
+    yaxis2 = list(title = 'Percentual de Cota Racial', overlaying = 'y', side = 'right', range = c(0, 100))
+  )
+
+
+
+# Layout com o filtro e a remoção da opção "All"
+filter_layout <- bscols(
+  widths = c(3, 9),
+  filter_select,
+  combined_plot
+)
+
+# Exibir o layout com o filtro
+browsable(filter_layout)
+```
+
+### Por Carreira
+    
+```{r datatable}
+# empilhar df_total e df_carreira
+
+df_completo <- rbind(df_total_carreira, df_carreira)
+
+
+
+# Criar um SharedData para a base agregada
+shared_agg_df_Carreira <- SharedData$new(df_completo, key = ~var_0183_carreira, group = "CategoryFilter_carreira")
+
+# Criar um filtro de seleção para as categorias
+filter_select_carreira <- filter_select(
+  id = "category_selector_carreira",
+  label = "Selecione a carreira",
+  sharedData = shared_agg_df_Carreira,
+  group = ~var_0183_carreira, 
+  multiple = FALSE, allLevels = TRUE
+)
+
+# Criar o gráfico combinado de barras e linhas por mês e ano
+combined_plot_carreira <- plot_ly(shared_agg_df_Carreira) %>%
+  add_bars(x = ~interaction(ano), y = ~Total, name = 'Ingressos', color = I("blue")) %>%
+  add_lines(x = ~interaction(ano), y = ~perc_cotas_cota_racial, name = '% Cota Racial', yaxis = 'y2', line = list(color = "red")) %>%
+  layout(
+    title = "Total de Ingressos e Percentual de Cota Racial por Ano",
+    xaxis = list(title = "Ano de Ingresso"),
+    yaxis = list(title = 'Total de Ingressos '),
+    yaxis2 = list(title = 'Percentual de Cota Racial', overlaying = 'y', side = 'right', range = c(0, 100))
+  )
+
+
+
+# Layout com o filtro e a remoção da opção "All"
+filter_layout_carreira <- bscols(
+  widths = c(3, 9),
+  filter_select_carreira,
+  combined_plot_carreira
+)
+
+# Exibir o layout com o filtro
+browsable(filter_layout_carreira)
+```
+
+```{js}
+function filter_default() {
+    document.getElementById("category_selector").getElementsByClassName("selectized") 
+[0].selectize.setValue("Todos os Órgãos", false);
+    document.getElementById("category_selector_carreira").getElementsByClassName("selectized") 
+[0].selectize.setValue("Todas as Carreiras", false);
+    
+ }
+window.onload = filter_default;
+```
+
+Informações Gerais {data-orientation=rows data-icon="fa-info-circle"}
+===================================== 
+
+
+### Teste
+
